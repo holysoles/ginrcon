@@ -1,0 +1,10 @@
+version: '3.9'
+services:
+  ginrcon:
+    image: ghcr.io/holysoles/ginrcon:latest
+    restart: unless-stopped
+    ports:
+      - "8085:8080/tcp"
+    environment:
+      PORT: 8080
+      TRUSTED_PROXIES: "192.168.1.2"
