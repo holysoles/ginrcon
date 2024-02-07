@@ -3,6 +3,8 @@ package main
 import (
 	"net"
 	"net/http"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -23,12 +25,16 @@ type errorResponse struct {
 }
 
 func main() {
+	gin.SetMode(gin.ReleaseMode)
 	r := gin.Default()
+	r.ForwardedByClientIP = true
+	proxies := strings.Split(os.Getenv("TRUSTED_PROXIES"), ",")
+	r.SetTrustedProxies(proxies)
 
 	r.GET("/status", healthCheck)
 	r.POST("/command", processCommand)
 
-	r.Run()
+	r.Run(":" + os.Getenv("PORT"))
 }
 
 func processCommand(c *gin.Context) {
