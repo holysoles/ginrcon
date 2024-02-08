@@ -1,30 +1,63 @@
 package main
 
 import (
+	"errors"
+	"fmt"
 	"net"
 	"net/http"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/go-playground/validator/v10"
 	"github.com/gorcon/rcon"
 )
 
-type rconInfo struct {
-	Server   string `form:"server" json:"server" xml:"server"  binding:"required"`
-	Password string `form:"password" json:"password" xml:"password"  binding:"required"`
-	Command  string `form:"command" json:"command" xml:"command"  binding:"required"`
+var (
+	gConn *rcon.Conn
+
+	ErrNoDefaultConnection      = errors.New("no connection details were specified and no valid default connection exists")
+	ErrInvalidConnectionDetails = errors.New("invalid connection details to the rcon server were provided")
+	ErrInvalidResponseFromRcon  = errors.New("an invalid response was received from the rcon server")
+)
+
+type openConnInfo struct {
+	Server   string `form:"server" json:"server" xml:"server"`
+	Password string `form:"password" json:"password" xml:"password"`
 }
-type rconReply struct {
+type commandReq struct {
+	openConnInfo
+	Command string `form:"command" json:"command" xml:"command"  binding:"required"`
+}
+type commandRes struct {
 	Message string `json:"message"`
-}
-type errorResponse struct {
-	Error string
 }
 
 func main() {
+	initDefaultRcon()
+	initWeb()
+}
+
+func initDefaultRcon() {
+	var err error
+	rconHostPort := net.JoinHostPort(os.Getenv("RCON_SERVER"), os.Getenv("RCON_PORT"))
+	rconAdminPass := os.Getenv("RCON_ADMIN_PASSWORD")
+	info := openConnInfo{Server: rconHostPort, Password: rconAdminPass}
+
+	//check env vars to construct
+	gConn, err = openRcon(info)
+	//log error as a warning, if we have bad default info just throw it away
+	if err == ErrInvalidConnectionDetails {
+		fmt.Println("default RCON server connection details were not provided or invalid")
+		return
+	} else if err != nil {
+		fmt.Println(err)
+		return
+	} else {
+		fmt.Println("successfully opened default RCON connection to", rconHostPort)
+	}
+}
+
+func initWeb() {
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.Default()
 	r.ForwardedByClientIP = true
@@ -34,36 +67,45 @@ func main() {
 	r.GET("/status", healthCheck)
 	r.POST("/command", processCommand)
 
-	r.Run(":" + os.Getenv("PORT"))
+	bindPort, customBind := os.LookupEnv("PORT")
+	if customBind {
+		r.Run(":" + bindPort)
+	} else {
+		r.Run()
+	}
 }
 
 func processCommand(c *gin.Context) {
-	var info rconInfo
+	var info commandReq
 	err := c.Bind(&info)
 	if err != nil {
 		c.AbortWithStatus(http.StatusBadRequest)
 		return
 	}
-
-	err = info.validateConnectionInfo()
-	if err != nil {
-		c.JSON(http.StatusBadGateway, errorResponse{"Failed to test TCP connection to provided server"})
-		return
-	}
-
-	conn, err := rcon.Dial(info.Server, info.Password)
-	if err != nil {
-		switch err {
-		case rcon.ErrAuthNotRCON:
-		case rcon.ErrInvalidAuthResponse:
-			c.AbortWithStatus(http.StatusInternalServerError)
-		case rcon.ErrAuthFailed:
-			fallthrough
-		default:
-			c.AbortWithStatus(http.StatusUnauthorized)
+	// if they passed connection info, we should try to create a new connection
+	var conn *rcon.Conn
+	if info.openConnInfo.Server != "" {
+		fmt.Println("using provided connection info for incoming request")
+		conn, err = openRcon(info.openConnInfo)
+		if err != nil {
+			switch err {
+			case ErrInvalidResponseFromRcon:
+				c.AbortWithError(http.StatusInternalServerError, err)
+			case ErrInvalidConnectionDetails:
+				c.AbortWithError(http.StatusUnauthorized, err)
+			default: //assume we screwed up
+				c.AbortWithError(http.StatusInternalServerError, err)
+			}
+			return
 		}
+		defer conn.Close()
+	} else if gConn != nil {
+		fmt.Println("using default server connection for incoming request")
+		conn = gConn
+	} else {
+		// no valid default connection and no credentials provided
+		c.AbortWithError(http.StatusBadGateway, ErrNoDefaultConnection)
 	}
-
 	msg, err := conn.Execute(info.Command)
 	if err != nil {
 		switch err {
@@ -74,24 +116,11 @@ func processCommand(c *gin.Context) {
 		default:
 			c.AbortWithStatus(http.StatusInternalServerError)
 		}
+		return
 	}
-	res := rconReply{msg}
+	res := commandRes{msg}
 
 	c.JSON(http.StatusOK, res)
-}
-
-func (i *rconInfo) validateConnectionInfo() error {
-	validate := validator.New(validator.WithRequiredStructEnabled())
-	err := validate.Var(i.Server, "required,hostname_port")
-	if err != nil {
-		return err
-	}
-	dialer := &net.Dialer{Timeout: time.Second * 1}
-	_, err = dialer.Dial("tcp", i.Server)
-	if err != nil {
-		return err
-	}
-	return nil
 }
 
 func healthCheck(c *gin.Context) {
