@@ -12,7 +12,7 @@ func openRcon(i openConnInfo) (*rcon.Conn, error) {
 	// basic validation so we can return more verbose error messages
 	err := i.validateConnectionInfo()
 	if err != nil {
-		return nil, ErrInvalidConnectionDetails
+		return nil, err
 	}
 
 	//actually open
@@ -41,7 +41,7 @@ func (i *openConnInfo) validateConnectionInfo() error {
 	dialer := &net.Dialer{Timeout: time.Second * 1}
 	_, err = dialer.Dial("tcp", i.Server)
 	if err != nil {
-		return err
+		return ErrUnableToConnectTcpRcon
 	}
 	return nil
 }
