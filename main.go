@@ -13,11 +13,14 @@ import (
 )
 
 var (
-	gConn *rcon.Conn
+	defConn = false
 
-	ErrNoDefaultConnection      = errors.New("no connection details were specified and no valid default connection exists")
-	ErrInvalidConnectionDetails = errors.New("invalid connection details to the rcon server were provided")
-	ErrInvalidResponseFromRcon  = errors.New("an invalid response was received from the rcon server")
+	ErrMissingDefaultConnectionInfo = errors.New("at least one default connection parameter was specified, but others were missing")
+	ErrInvalidDefaultConnection     = errors.New("error opening a connection to the specified default rcon server")
+	ErrNoDefaultConnection          = errors.New("no connection details were specified and no valid default connection exists")
+	ErrInvalidConnectionDetails     = errors.New("invalid connection details to the rcon server were provided")
+	ErrInvalidResponseFromRcon      = errors.New("an invalid response was received from the rcon server")
+	ErrUnableToConnectTcpRcon       = errors.New("unable to establish tcp connection to specified rcon server")
 )
 
 type openConnInfo struct {
@@ -33,28 +36,49 @@ type commandRes struct {
 }
 
 func main() {
-	initDefaultRcon()
+	go testDefault()
 	initWeb()
 }
 
-func initDefaultRcon() {
-	var err error
-	rconHostPort := net.JoinHostPort(os.Getenv("RCON_SERVER"), os.Getenv("RCON_PORT"))
-	rconAdminPass := os.Getenv("RCON_ADMIN_PASSWORD")
-	info := openConnInfo{Server: rconHostPort, Password: rconAdminPass}
+func openDefault() (*rcon.Conn, error) {
+	s, defS := os.LookupEnv("RCON_SERVER")
+	p, defP := os.LookupEnv("RCON_PORT")
+	pwd, defPwd := os.LookupEnv("RCON_ADMIN_PASSWORD")
 
-	//check env vars to construct
-	gConn, err = openRcon(info)
-	//log error as a warning, if we have bad default info just throw it away
-	if err == ErrInvalidConnectionDetails {
-		fmt.Println("default RCON server connection details were not provided or invalid")
-		return
-	} else if err != nil {
+	if !defS && !defP && !defPwd {
+		//nothing specified
+		fmt.Println("no default connection information specified")
+		return nil, nil
+	}
+	defConn = true // even if we arent able to setup the connection, there was intent to
+	if !defS || !defP || !defPwd {
+		return nil, ErrMissingDefaultConnectionInfo
+	}
+	rconHostPort := net.JoinHostPort(s, p)
+	info := openConnInfo{Server: rconHostPort, Password: pwd}
+	con, err := openRcon(info)
+	if err != nil {
+		return nil, err
+	}
+	defConn = true
+	return con, nil
+}
+func testDefault() {
+	// errors here are non-fatal, users can still provide specific connection server info later on
+	con, err := openDefault()
+	if err != nil {
 		fmt.Println(err)
 		return
-	} else {
-		fmt.Println("successfully opened default RCON connection to", rconHostPort)
 	}
+	if con == nil {
+		return
+	}
+	err = con.Close()
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	fmt.Println("successfully tested default RCON connection")
 }
 
 func initWeb() {
@@ -82,7 +106,6 @@ func processCommand(c *gin.Context) {
 		c.AbortWithStatus(http.StatusBadRequest)
 		return
 	}
-	// if they passed connection info, we should try to create a new connection
 	var conn *rcon.Conn
 	if info.openConnInfo.Server != "" {
 		fmt.Println("using provided connection info for incoming request")
@@ -93,19 +116,26 @@ func processCommand(c *gin.Context) {
 				c.AbortWithError(http.StatusInternalServerError, err)
 			case ErrInvalidConnectionDetails:
 				c.AbortWithError(http.StatusUnauthorized, err)
+			case ErrUnableToConnectTcpRcon:
+				c.AbortWithError(http.StatusBadGateway, err)
 			default: //assume we screwed up
 				c.AbortWithError(http.StatusInternalServerError, err)
 			}
 			return
 		}
-		defer conn.Close()
-	} else if gConn != nil {
+	} else if defConn {
 		fmt.Println("using default server connection for incoming request")
-		conn = gConn
+		conn, err = openDefault()
+		if err != nil {
+			fmt.Println(err)
+			c.AbortWithError(http.StatusBadGateway, ErrInvalidDefaultConnection)
+		}
 	} else {
-		// no valid default connection and no credentials provided
-		c.AbortWithError(http.StatusBadGateway, ErrNoDefaultConnection)
+		// no default connection and no connection info provided
+		c.AbortWithError(http.StatusBadRequest, ErrNoDefaultConnection)
 	}
+	defer conn.Close()
+
 	msg, err := conn.Execute(info.Command)
 	if err != nil {
 		switch err {
