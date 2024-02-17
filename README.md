@@ -1,5 +1,5 @@
 # GinRCON
-A lightweight, simple Go webserver build on Gin to provide a REST API frontend to sending RCON commands to a game server.
+A lightweight, simple Go webserver build on Gin to provide a REST API frontend to sending RCON commands to a game server. Available in a Docker image, see [the packages page](https://github.com/holysoles/ginrcon/pkgs/container/ginrcon) for this repo.
 
 ## API Call Examples
 ### Send command to default RCON server
