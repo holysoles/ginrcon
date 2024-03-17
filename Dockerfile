@@ -1,26 +1,21 @@
 # syntax=docker/dockerfile:1
 
+# run the build
 FROM golang:1.21.6 AS build-stage
-
 WORKDIR /app
-
 COPY go.mod go.sum ./
 RUN go mod download
 COPY *.go ./
-# run the build
 RUN CGO_ENABLED=0 GOOS=linux go build -o /ginrcon
 
-# Run the tests in the container
+# run tests
 FROM build-stage AS run-test-stage
 RUN go test -v ./...
 
-# Deploy the application binary into a lean image
+# prep runtime
 FROM alpine:3.14 AS build-release-stage
-
 WORKDIR /
-
 COPY --from=build-stage /ginrcon /ginrcon
-
 ENV PORT=8080 \
     TRUSTED_PROXIES= \
     RCON_SERVER= \
