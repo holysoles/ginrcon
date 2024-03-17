@@ -1,6 +1,6 @@
 on:
-  push:
-    branches: ['master']
+  release:
+    types: [published]
 
 env:
   REGISTRY: ghcr.io
