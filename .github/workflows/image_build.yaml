@@ -1,3 +1,5 @@
+name: Build and release Docker image
+
 on:
   release:
     types: [published]
