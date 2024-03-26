@@ -129,10 +129,12 @@ func processCommand(c *gin.Context) {
 		if err != nil {
 			fmt.Println(err)
 			c.AbortWithError(http.StatusBadGateway, ErrInvalidDefaultConnection)
+			return
 		}
 	} else {
 		// no default connection and no connection info provided
 		c.AbortWithError(http.StatusBadRequest, ErrNoDefaultConnection)
+		return
 	}
 	defer conn.Close()
 
