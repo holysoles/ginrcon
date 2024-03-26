@@ -42,8 +42,14 @@ func main() {
 
 func openDefault() (*rcon.Conn, error) {
 	s, defS := os.LookupEnv("RCON_SERVER")
+	s = "docker3.donut.lan"
+	defS = true //TODO remove
 	p, defP := os.LookupEnv("RCON_PORT")
+	p = "25575"
+	defP = true
 	pwd, defPwd := os.LookupEnv("RCON_ADMIN_PASSWORD")
+	pwd = "flyhigh"
+	defPwd = true
 
 	if !defS && !defP && !defPwd {
 		//nothing specified
@@ -129,10 +135,12 @@ func processCommand(c *gin.Context) {
 		if err != nil {
 			fmt.Println(err)
 			c.AbortWithError(http.StatusBadGateway, ErrInvalidDefaultConnection)
+			return
 		}
 	} else {
 		// no default connection and no connection info provided
 		c.AbortWithError(http.StatusBadRequest, ErrNoDefaultConnection)
+		return
 	}
 	defer conn.Close()
 
