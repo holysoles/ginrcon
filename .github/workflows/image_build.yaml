@@ -29,6 +29,9 @@ jobs:
         uses: docker/metadata-action@v5.5.1
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=semver,pattern={{ version }}
+            type=raw,value=latest,enable=${{ !github.event.release.prerelease }}
       - name: image build and push
         uses: docker/build-push-action@v5.3.0
         with:
