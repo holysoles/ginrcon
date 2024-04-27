@@ -30,7 +30,7 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=raw,value=latest,enable=${{ !contains(github.ref, 'build') }}
+            type=raw,value=latest,enable=${{ !github.event.release.prerelease }}
       - name: image build and push
         uses: docker/build-push-action@v5.3.0
         with:
