@@ -16,11 +16,7 @@ RUN go test -v ./...
 FROM alpine:3.20 AS build-release-stage
 WORKDIR /
 COPY --from=build-stage /ginrcon /ginrcon
-ENV PORT=8080 \
-    TRUSTED_PROXIES= \
-    RCON_SERVER= \
-    RCON_PORT= \
-    RCON_ADMIN_PASSWORD=
+ENV PORT=8080
 
-EXPOSE 8080
+EXPOSE 8080/tcp
 ENTRYPOINT ["/ginrcon"]
