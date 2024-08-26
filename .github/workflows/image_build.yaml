@@ -32,6 +32,8 @@ jobs:
           tags: |
             type=semver,pattern={{ version }}
             type=raw,value=latest,enable=${{ !github.event.release.prerelease }}
+      - name: setup buildx (w/ docker-container driver)
+        uses: docker/setup-buildx-action@v3.6.1
       - name: image build and push
         uses: docker/build-push-action@v6.7.0
         with:
