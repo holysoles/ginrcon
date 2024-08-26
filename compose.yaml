@@ -8,6 +8,17 @@ services:
     environment:
       PORT: 8080
       TRUSTED_PROXIES: "192.168.1.2"
-      RCON_SERVER: gameserver
+      RCON_SERVER: gameserver # hostname for connection, if in this compose file, can be service name
       RCON_PORT: 25575
-      RCON_ADMIN_PASSWORD: flyhigh
+      RCON_ADMIN_PASSWORD: somepass
+    healthcheck:
+      test: ["CMD-SHELL", "curl", "-f", "http://localhost:${PORT}/status"]
+      interval: 90s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    # Optionally set order dependency here for startup
+    #depends-on:
+     # - "gameserver"
+  #gameserver:
+  #  image: jammsen/palworld-dedicated-server:latest
