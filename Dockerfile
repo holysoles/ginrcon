@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 # run the build
-FROM golang:1.24.7 AS build-stage
+FROM golang:1.26.0 AS build-stage
 WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
@@ -13,7 +13,7 @@ FROM build-stage AS run-test-stage
 RUN go test -v ./...
 
 # prep runtime
-FROM alpine:3.21.4 AS build-release-stage
+FROM alpine:3.23.3 AS build-release-stage
 WORKDIR /
 COPY --from=build-stage /ginrcon /ginrcon
 ENV PORT=8080
